@@ -1,105 +1,120 @@
-<!-- templates/index.html -->
 <!DOCTYPE html>
 <html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>F1 Race Strategy Calculator</title>
-    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            max-width: 1200px;
-            margin: 0 auto;
-            padding: 20px;
-            background-color: #f5f5f5;
-        }
-        .container {
-            background-color: white;
-            padding: 20px;
-            border-radius: 8px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        }
-        .form-group {
-            margin-bottom: 20px;
-        }
-        input[type="number"] {
-            padding: 8px;
-            border: 1px solid #ddd;
-            border-radius: 4px;
-            width: 200px;
-        }
-        button {
-            background-color: #e10600;
-            color: white;
-            border: none;
-            padding: 10px 20px;
-            border-radius: 4px;
-            cursor: pointer;
-        }
-        button:hover {
-            background-color: #b30500;
-        }
-        #results {
-            margin-top: 20px;
-        }
-        #plot {
-            margin-top: 20px;
-        }
-        .strategy-info {
-            margin-top: 20px;
-            padding: 15px;
-            background-color: #f8f9fa;
-            border-radius: 4px;
-        }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <h1>F1 Race Strategy Calculator</h1>
-        
-        <div class="form-group">
-            <label for="laps">Number of Laps:</label>
-            <input type="number" id="laps" min="1" required>
-            <button onclick="calculateStrategy()">Calculate Strategy</button>
-        </div>
 
-        <div class="strategy-info" id="results"></div>
-        <div id="plot"></div>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>F1 Race Strategy</title>
+  <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+
+  <nav class="flex justify-between items-center p-4 bg-gray-800 shadow-md">
+    <h1 class="text-red-500 text-xl font-bold">🏎️ F1 Insights</h1>
+    <!-- <ul class="flex space-x-6 text-sm text-white">
+      <li><a href="#" class="hover:text-red-500">Home</a></li>
+      <li><a href="#calculator" class="hover:text-red-500">Strategy Calculator</a></li>
+      <li><a href="#about" class="hover:text-red-500">About F1</a></li>
+      <li><a href="#contact" class="hover:text-red-500">Contact</a></li>
+    </ul> -->
+  </nav>
+
+<body class="bg-gray-900 text-white font-sans">
+  <div class="min-h-screen p-6">
+    <div class="flex justify-center">
+      <div class="bg-gray-800 p-6 rounded-2xl shadow-md max-w-md w-full">
+        <h2 class="text-xl font-semibold mb-4 flex items-center">
+          🏎️ Race Strategy Calculator
+        </h2>
+        <label for="laps" class="block mb-2">Number of Laps:</label>
+        <input type="number" id="laps" value="50" class="w-full p-2 rounded bg-gray-700 border border-gray-600 text-white">
+        <button onclick="calculateStrategy()" class="mt-4 bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded">
+          Calculate Strategy
+        </button>
+      </div>
     </div>
 
-    <script>
-        async function calculateStrategy() {
-            const laps = document.getElementById('laps').value;
-            if (!laps || laps < 1) {
-                alert('Please enter a valid number of laps');
-                return;
-            }
+    
+    <div class="text-center mt-6">
+      <h3 class="text-lg font-semibold" id="best-strategy">Best strategy: Start on S, switch to H</h3>
+      <p class="text-sm" id="total-time">Total time: 79:46.57</p>
+    </div>
 
-            try {
-                const response = await fetch('/calculate', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({ laps: laps })
-                });
+    <div class="flex justify-center mt-6">
+      <div id="plot" class="w-full max-w-4xl px-4"></div>
+    </div>
 
-                const data = await response.json();
-                
-                // Update results
-                document.getElementById('results').innerHTML = `
-                    <h3>${data.strategy}</h3>
-                    <p>${data.time}</p>
-                `;
+    <section class="mt-10 bg-gray-800 p-6 rounded-xl">
+      <h3 class="text-xl font-bold flex items-center">
+        🔮 About Formula 1
+      </h3>
+      <p class="mt-2 text-sm text-gray-300">
+        Formula 1 is the pinnacle of motorsport, blending cutting-edge technology with high-speed racing and global competition. Teams strategize every race based on tire wear, fuel loads, weather, and track dynamics. Understanding race strategy is key to success on the grid.
+      </p>
+    </section>
+  </div>
 
-                // Update plot
-                Plotly.newPlot('plot', JSON.parse(data.plot).data, JSON.parse(data.plot).layout);
-            } catch (error) {
-                console.error('Error:', error);
-                alert('An error occurred while calculating the strategy');
-            }
+
+  
+  <script>
+    function calculateStrategy() {
+      const laps = parseInt(document.getElementById("laps").value);
+      const strategy = [];
+      const s_times = [];
+      const h_times = [];
+      let switchLap = Math.floor(laps / 3);
+      let totalTime = 0;
+
+      for (let i = 1; i <= laps; i++) {
+        if (i <= switchLap) {
+          let time = 88 + i * 0.3;
+          s_times.push(time);
+          h_times.push(0);
+          totalTime += time;
+        } else {
+          let time = 93 + (i - switchLap) * 0.1;
+          h_times.push(time);
+          s_times.push(0);
+          totalTime += time;
         }
-    </script>
+      }
+
+      document.getElementById("best-strategy").innerText = `Best strategy: Start on S, switch to H`;
+      document.getElementById("total-time").innerText = `Total time: ${totalTime.toFixed(2)}`;
+
+      const plot = {
+        data: [
+          {
+            x: [...Array(laps).keys()].map(i => i + 1),
+            y: s_times,
+            type: 'scatter',
+            mode: 'lines',
+            name: 'S compound',
+            line: { color: 'red' }
+          },
+          {
+            x: [...Array(laps).keys()].map(i => i + 1),
+            y: h_times,
+            type: 'scatter',
+            mode: 'lines',
+            name: 'H compound',
+            line: { color: 'black' }
+          }
+        ],
+        layout: {
+          title: `Race Strategy: S → H`,
+          xaxis: { title: 'Lap Number' },
+          yaxis: { title: 'Lap Time (seconds)' },
+          height: 400,
+          autosize: true
+        }
+      };
+
+      Plotly.newPlot('plot', plot.data, plot.layout, { responsive: true });
+    }
+
+    window.onload = calculateStrategy;
+  </script>
 </body>
+
 </html>

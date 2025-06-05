@@ -72,7 +72,7 @@ def create_plot(numberOfLaps, c1, c2):
 
     x = list(range(1, numberOfLaps + 1))
 
-    # Create Plotly figure
+
     fig = go.Figure()
 
     colors = {
