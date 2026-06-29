@@ -1,120 +1,243 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" class="h-full">
 
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>F1 Race Strategy</title>
-  <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+  <title>F1 Strategy Lab</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ctext y='13' font-size='14'%3E%F0%9F%8F%8E%EF%B8%8F%3C/text%3E%3C/svg%3E">
+  <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
   <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
 </head>
 
-  <nav class="flex justify-between items-center p-4 bg-gray-800 shadow-md">
-    <h1 class="text-red-500 text-xl font-bold">🏎️ F1 Insights</h1>
-    <!-- <ul class="flex space-x-6 text-sm text-white">
-      <li><a href="#" class="hover:text-red-500">Home</a></li>
-      <li><a href="#calculator" class="hover:text-red-500">Strategy Calculator</a></li>
-      <li><a href="#about" class="hover:text-red-500">About F1</a></li>
-      <li><a href="#contact" class="hover:text-red-500">Contact</a></li>
-    </ul> -->
-  </nav>
+<body class="bg-gray-950 text-gray-100 font-sans h-screen overflow-hidden flex flex-col">
 
-<body class="bg-gray-900 text-white font-sans">
-  <div class="min-h-screen p-6">
-    <div class="flex justify-center">
-      <div class="bg-gray-800 p-6 rounded-2xl shadow-md max-w-md w-full">
-        <h2 class="text-xl font-semibold mb-4 flex items-center">
-          🏎️ Race Strategy Calculator
-        </h2>
-        <label for="laps" class="block mb-2">Number of Laps:</label>
-        <input type="number" id="laps" value="50" class="w-full p-2 rounded bg-gray-700 border border-gray-600 text-white">
-        <button onclick="calculateStrategy()" class="mt-4 bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded">
-          Calculate Strategy
-        </button>
+  <!-- ── Nav bar — extra height reserved for future controls ── -->
+  <nav class="flex-shrink-0 flex items-center justify-between px-6 py-5 bg-gray-900 border-b border-gray-800 shadow-md">
+    <div class="flex items-center gap-3">
+      <span class="text-2xl">🏎️</span>
+      <div>
+        <span class="text-red-500 font-bold tracking-tight text-lg block leading-tight">F1 Strategy Lab</span>
+        <span class="text-xs text-gray-600 leading-tight">Tyre degradation · fuel burn-off · Monte Carlo · FIA two-compound rule</span>
       </div>
     </div>
+    <!-- Placeholder row for future nav controls -->
+    <div class="flex items-center gap-4">
+    </div>
+    <a href="https://github.com/djentlehead/F1-Race-Strategy-Generator" target="_blank" rel="noopener"
+      class="text-xs text-gray-500 hover:text-white transition-colors">View source ↗</a>
+  </nav>
 
-    
-    <div class="text-center mt-6">
-      <h3 class="text-lg font-semibold" id="best-strategy">Best strategy: Start on S, switch to H</h3>
-      <p class="text-sm" id="total-time">Total time: 79:46.57</p>
+  <!-- ── Dashboard: 3-column, no scroll ── -->
+  <div class="flex-1 flex gap-3 p-3 min-h-0 overflow-hidden">
+
+    <!-- ─────────────── LEFT: Configure ─────────────── -->
+    <aside class="w-64 flex-shrink-0 min-h-0">
+      <form id="strategy-form"
+        class="h-full bg-gray-900 border border-gray-800 rounded-xl p-5 flex flex-col gap-4">
+
+        <p class="text-xs font-semibold uppercase tracking-widest text-gray-500">Configure</p>
+
+        <div>
+          <label for="track" class="block text-xs text-gray-400 mb-1.5">Circuit</label>
+          <select id="track" name="track"
+            class="w-full p-2.5 rounded-lg bg-gray-800 border border-gray-700 text-white text-sm focus:ring-1 focus:ring-red-500 focus:outline-none">
+            {% for t in tracks %}
+            <option value="{{ t.key }}" data-laps="{{ t.laps }}" data-pit-loss="{{ t.pit_loss }}"
+              data-base-lap-time="{{ t.base_lap_time }}" data-deg-multiplier="{{ t.deg_multiplier }}"
+              {% if t.key=='monza' %}selected{% endif %}>
+              {{ t.name }}
+            </option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <div>
+          <label for="laps" class="block text-xs text-gray-400 mb-1.5">Race laps</label>
+          <input type="number" id="laps" name="laps" min="2" max="100"
+            class="w-full p-2.5 rounded-lg bg-gray-800 border border-gray-700 text-white text-sm focus:ring-1 focus:ring-red-500 focus:outline-none">
+        </div>
+
+        <div id="custom-fields" class="hidden space-y-3 border-t border-gray-800 pt-4">
+          <p class="text-xs uppercase tracking-wide text-gray-500">Custom track params</p>
+          <div>
+            <label for="pit_loss" class="block text-xs text-gray-400 mb-1.5">Pit loss (s)</label>
+            <input type="number" step="0.1" id="pit_loss" name="pit_loss"
+              class="w-full p-2 rounded-lg bg-gray-800 border border-gray-700 text-white text-sm">
+          </div>
+          <div>
+            <label for="base_lap_time" class="block text-xs text-gray-400 mb-1.5">Base lap (s)</label>
+            <input type="number" step="0.1" id="base_lap_time" name="base_lap_time"
+              class="w-full p-2 rounded-lg bg-gray-800 border border-gray-700 text-white text-sm">
+          </div>
+          <div>
+            <label for="deg_multiplier" class="block text-xs text-gray-400 mb-1.5">Deg multiplier</label>
+            <input type="number" step="0.05" id="deg_multiplier" name="deg_multiplier"
+              class="w-full p-2 rounded-lg bg-gray-800 border border-gray-700 text-white text-sm">
+          </div>
+        </div>
+
+        <!-- Tyre allocation -->
+        <div class="border-t border-gray-800 pt-4">
+          <p class="text-xs font-semibold uppercase tracking-widest text-gray-500 mb-2">🛞 Tyre Allocation</p>
+          <div class="grid grid-cols-3 gap-x-2 gap-y-1.5 text-xs">
+            <!-- column headers -->
+            <span></span>
+            <span class="text-center text-gray-500">New</span>
+            <span class="text-center text-gray-500">Used</span>
+            <!-- Soft row -->
+            <span class="flex items-center gap-1.5">
+              <span class="w-2.5 h-2.5 rounded-full flex-shrink-0" style="background:#e10600"></span>
+              <span class="text-gray-400">Soft</span>
+            </span>
+            <input type="number" id="inv-S-new" min="0" max="9" value="2"
+              class="p-1.5 rounded bg-gray-800 border border-gray-700 text-white text-xs text-center w-full focus:ring-1 focus:ring-red-500 focus:outline-none">
+            <input type="number" id="inv-S-used" min="0" max="9" value="0"
+              class="p-1.5 rounded bg-gray-800 border border-gray-700 text-white text-xs text-center w-full focus:ring-1 focus:ring-red-500 focus:outline-none">
+            <!-- Medium row -->
+            <span class="flex items-center gap-1.5">
+              <span class="w-2.5 h-2.5 rounded-full flex-shrink-0" style="background:#ffd700"></span>
+              <span class="text-gray-400">Med</span>
+            </span>
+            <input type="number" id="inv-M-new" min="0" max="9" value="3"
+              class="p-1.5 rounded bg-gray-800 border border-gray-700 text-white text-xs text-center w-full focus:ring-1 focus:ring-red-500 focus:outline-none">
+            <input type="number" id="inv-M-used" min="0" max="9" value="0"
+              class="p-1.5 rounded bg-gray-800 border border-gray-700 text-white text-xs text-center w-full focus:ring-1 focus:ring-red-500 focus:outline-none">
+            <!-- Hard row -->
+            <span class="flex items-center gap-1.5">
+              <span class="w-2.5 h-2.5 rounded-full flex-shrink-0 border border-gray-500" style="background:#f5f5f5"></span>
+              <span class="text-gray-400">Hard</span>
+            </span>
+            <input type="number" id="inv-H-new" min="0" max="9" value="4"
+              class="p-1.5 rounded bg-gray-800 border border-gray-700 text-white text-xs text-center w-full focus:ring-1 focus:ring-red-500 focus:outline-none">
+            <input type="number" id="inv-H-used" min="0" max="9" value="0"
+              class="p-1.5 rounded bg-gray-800 border border-gray-700 text-white text-xs text-center w-full focus:ring-1 focus:ring-red-500 focus:outline-none">
+          </div>
+        </div>
+
+        <button type="submit" id="submit-btn"
+          class="w-full bg-red-600 hover:bg-red-700 transition-colors text-white text-sm font-bold py-3 rounded-lg flex items-center justify-center gap-2 mt-auto">
+          <span id="submit-label">Calculate Strategy</span>
+        </button>
+
+        <div class="flex items-center justify-between text-xs text-gray-500 pt-3 border-t border-gray-800">
+          <span class="flex items-center gap-1.5">
+            <span class="w-3 h-3 rounded-full inline-block" style="background:#e10600"></span> Soft
+          </span>
+          <span class="flex items-center gap-1.5">
+            <span class="w-3 h-3 rounded-full inline-block" style="background:#ffd700"></span> Medium
+          </span>
+          <span class="flex items-center gap-1.5">
+            <span class="w-3 h-3 rounded-full inline-block border border-gray-500" style="background:#f5f5f5"></span> Hard
+          </span>
+        </div>
+      </form>
+    </aside>
+
+    <!-- ─────────────── CENTER: Main chart + Monte Carlo ─────────────── -->
+    <div class="flex-1 flex flex-col gap-3 min-w-0 min-h-0">
+
+      <!-- Top: results summary + chart fill this panel -->
+      <div class="flex-1 min-h-0 bg-gray-900 border border-gray-800 rounded-xl px-5 pt-4 pb-4 flex flex-col">
+
+        <!-- Results summary row -->
+        <div class="flex-shrink-0 mb-3">
+          <div id="empty-state" class="text-gray-500 text-sm">
+            Select a circuit and hit <span class="text-gray-300">Calculate Strategy</span>.
+          </div>
+          <div id="results-content" class="hidden">
+            <div class="flex items-center justify-between">
+              <p class="text-xs uppercase tracking-wide text-gray-500" id="result-track"></p>
+              <span id="confidence-badge" class="hidden text-xs font-bold px-2.5 py-0.5 rounded-full"></span>
+            </div>
+            <div class="flex items-baseline gap-4 mt-0.5">
+              <h2 class="text-base font-bold text-white leading-tight" id="best-strategy"></h2>
+              <span class="text-xl font-extrabold text-yellow-400" id="total-time"></span>
+            </div>
+            <p id="best-inventory-note" class="hidden text-xs mt-1"></p>
+          </div>
+          <div id="error-box" class="hidden text-red-400 text-xs bg-red-950/40 border border-red-800 rounded-lg p-2"></div>
+        </div>
+
+        <!-- Chart fills the rest of this panel -->
+        <div class="flex-shrink-0 text-xs font-semibold uppercase tracking-widest text-gray-500 mb-1">Strategy overview</div>
+        <div id="plot" class="flex-1 w-full min-h-0"></div>
+
+        <!-- Pit window pinned to bottom of chart panel -->
+        <div id="pit-window-bar" class="hidden flex-shrink-0 flex items-center justify-between mt-3 pt-3 border-t border-gray-800">
+          <div>
+            <p class="text-xs uppercase tracking-wide text-gray-500">Estimated pit window</p>
+            <p class="text-base font-bold text-white mt-0.5" id="pit-window-laps">—</p>
+          </div>
+          <div class="text-right">
+            <p class="text-xs uppercase tracking-wide text-gray-500">Optimal lap</p>
+            <p class="text-base font-bold text-yellow-400 mt-0.5" id="optimal-pit-lap">—</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Bottom: Monte Carlo (fixed height) -->
+      <div class="flex-shrink-0 bg-gray-900 border border-gray-800 rounded-xl px-5 py-4" style="height:195px; overflow-y:auto;">
+        <p class="text-xs font-semibold uppercase tracking-widest text-gray-500 mb-3">🎲 Monte Carlo win probability</p>
+        <div id="mc-rows" class="space-y-2"></div>
+      </div>
+
     </div>
 
-    <div class="flex justify-center mt-6">
-      <div id="plot" class="w-full max-w-4xl px-4"></div>
+    <!-- ─────────────── RIGHT: Single unified card ─────────────── -->
+    <div class="w-72 flex-shrink-0 min-h-0 bg-gray-900 border border-gray-800 rounded-xl flex flex-col overflow-hidden">
+
+      <!-- Strategy comparison -->
+      <div class="flex-shrink-0 px-5 pt-4 pb-3">
+        <p class="text-xs font-semibold uppercase tracking-widest text-gray-500 mb-2">Strategy comparison</p>
+        <table class="w-full text-xs">
+          <thead class="text-gray-500">
+            <tr>
+              <th class="py-1 text-left font-medium">Strategy</th>
+              <th class="py-1 text-center font-medium">Stops</th>
+              <th class="py-1 text-right font-medium">Δ to best</th>
+              <th class="py-1 text-center font-medium pl-2">Inv.</th>
+            </tr>
+          </thead>
+          <tbody id="alt-rows" class="text-gray-300"></tbody>
+        </table>
+      </div>
+
+      <div class="border-t border-gray-800 mx-4"></div>
+
+      <!-- Sensitivity heatmap -->
+      <div class="flex-shrink-0 px-5 pt-3 pb-1">
+        <p class="text-xs font-semibold uppercase tracking-widest text-gray-500">Strategy sensitivity</p>
+        <p class="text-xs text-gray-600 mt-0.5 mb-1">+s vs optimal 1-stop · ★ = best</p>
+        <div id="heatmap-plot" class="w-full" style="height:185px;"></div>
+      </div>
+
+      <div class="border-t border-gray-800 mx-4"></div>
+
+      <!-- Circuit (takes remaining space, scrolls if needed) -->
+      <div class="flex-1 min-h-0 overflow-y-auto px-5 pt-3 pb-4">
+        <p class="text-xs font-semibold uppercase tracking-widest text-gray-500 mb-2">🏁 Circuit</p>
+        <div id="circuit-svg-wrap" class="w-full text-gray-500" style="height:100px;">
+          <svg viewBox="0 0 200 130" class="w-full h-full" xmlns="http://www.w3.org/2000/svg">
+            <text x="100" y="68" text-anchor="middle" fill="currentColor" font-size="12" opacity="0.25">—</text>
+          </svg>
+        </div>
+        <dl class="mt-2 text-xs grid grid-cols-2 gap-y-1.5" id="circuit-stats"></dl>
+        <div id="calibration-section" class="hidden mt-3 pt-3 border-t border-gray-800">
+          <p class="text-xs uppercase tracking-wide text-gray-500 mb-1">📡 Real race calibration</p>
+          <p class="text-xs text-gray-400 leading-relaxed" id="calibration-intro-inline"></p>
+          <dl class="mt-1.5 text-xs grid grid-cols-2 gap-y-1.5" id="calibration-stats-inline"></dl>
+          <p class="mt-2 text-xs uppercase tracking-wide text-gray-500">Real pit laps vs our rec</p>
+          <ul class="mt-1 text-xs text-gray-400 space-y-0.5" id="calibration-strategies-inline"></ul>
+        </div>
+      </div>
+
     </div>
 
-    <section class="mt-10 bg-gray-800 p-6 rounded-xl">
-      <h3 class="text-xl font-bold flex items-center">
-        🔮 About Formula 1
-      </h3>
-      <p class="mt-2 text-sm text-gray-300">
-        Formula 1 is the pinnacle of motorsport, blending cutting-edge technology with high-speed racing and global competition. Teams strategize every race based on tire wear, fuel loads, weather, and track dynamics. Understanding race strategy is key to success on the grid.
-      </p>
-    </section>
   </div>
 
-
-  
-  <script>
-    function calculateStrategy() {
-      const laps = parseInt(document.getElementById("laps").value);
-      const strategy = [];
-      const s_times = [];
-      const h_times = [];
-      let switchLap = Math.floor(laps / 3);
-      let totalTime = 0;
-
-      for (let i = 1; i <= laps; i++) {
-        if (i <= switchLap) {
-          let time = 88 + i * 0.3;
-          s_times.push(time);
-          h_times.push(0);
-          totalTime += time;
-        } else {
-          let time = 93 + (i - switchLap) * 0.1;
-          h_times.push(time);
-          s_times.push(0);
-          totalTime += time;
-        }
-      }
-
-      document.getElementById("best-strategy").innerText = `Best strategy: Start on S, switch to H`;
-      document.getElementById("total-time").innerText = `Total time: ${totalTime.toFixed(2)}`;
-
-      const plot = {
-        data: [
-          {
-            x: [...Array(laps).keys()].map(i => i + 1),
-            y: s_times,
-            type: 'scatter',
-            mode: 'lines',
-            name: 'S compound',
-            line: { color: 'red' }
-          },
-          {
-            x: [...Array(laps).keys()].map(i => i + 1),
-            y: h_times,
-            type: 'scatter',
-            mode: 'lines',
-            name: 'H compound',
-            line: { color: 'black' }
-          }
-        ],
-        layout: {
-          title: `Race Strategy: S → H`,
-          xaxis: { title: 'Lap Number' },
-          yaxis: { title: 'Lap Time (seconds)' },
-          height: 400,
-          autosize: true
-        }
-      };
-
-      Plotly.newPlot('plot', plot.data, plot.layout, { responsive: true });
-    }
-
-    window.onload = calculateStrategy;
-  </script>
+  <script src="{{ url_for('static', filename='app.js') }}"></script>
 </body>
 
 </html>
