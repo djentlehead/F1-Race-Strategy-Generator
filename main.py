@@ -1,148 +1,116 @@
-# pylint: disable=import-error
-from flask import Flask, render_template, request, jsonify
-import plotly
-import plotly.graph_objects as go
-import json
-import numpy as np
+from __future__ import annotations
+
+from dataclasses import asdict, replace
+
+from flask import Flask, jsonify, render_template, request
+
+from f1_strategy.calibration.analyze import calibrate_all
+from f1_strategy.inventory import TyreInventory
+from f1_strategy.plotting import build_figure, figure_to_json
+from f1_strategy.simulation import SimulationConfig, simulate_strategies
+from f1_strategy.strategy import best_strategies, one_stop_heatmap
+from f1_strategy.tracks import TRACKS, get_track
 
 app = Flask(__name__)
 
-class Tyre:
-    def __init__(self, compound, age, base):
-        self.compound = compound
-        self.age = age
-        self.base = base
 
-    def lapTime(self):
-        compound = self.compound.lower()
-        if compound == "hard" or compound == "h":
-            return (self.base + 2.5) * (1.001) ** self.age
-        if compound == "medium" or compound == "m":
-            return (self.base + 1.6) * (1.003) ** self.age
-        if compound == "soft" or compound == "s":
-            return self.base * (1.005) ** self.age
-        return None
+CALIBRATION = {circuit: result.to_dict() for circuit, result in calibrate_all().items()}
 
-def strategy(numberOfLaps, c1, c2):
-    time = 500 * numberOfLaps
-    pitStop = 0
-    for i in range(numberOfLaps):
-        t = 0
-
-        c1_tyre = Tyre(c1, 0, 90)
-        t += c1_tyre.lapTime()
-        for j in range(i):
-            c1_tyre = Tyre(c1, c1_tyre.age + 1, c1_tyre.base)
-            t += c1_tyre.lapTime()
-
-        c2_tyre = Tyre(c2, 0, 90)
-        t += c2_tyre.lapTime()
-        for j in range(numberOfLaps - i - 1):  
-            c2_tyre = Tyre(c2, c2_tyre.age + 1, c2_tyre.base)
-            t += c2_tyre.lapTime()
-
-        if time > t:
-            time = t
-            pitStop = i + 1  
-        
-    return pitStop, time
-    pass
-
-def create_plot(numberOfLaps, c1, c2):
-    strat = strategy(numberOfLaps, c1, c2)
-    y1 = []
-    c1_tyre = Tyre(c1, 0, 90)
-    y1.append(c1_tyre.lapTime())
-    for j in range(strat[0] - 1):
-        c1_tyre = Tyre(c1, c1_tyre.age + 1, 90)
-        y1.append(c1_tyre.lapTime())
-
-    while (len(y1) != numberOfLaps):
-        y1.append(0)
-
-    y2 = []
-    for j in range(strat[0]):
-        y2.append(0)
-
-    c2_tyre = Tyre(c2, 0, 90)
-    y2.append(c2_tyre.lapTime())
-    for j in range(numberOfLaps - strat[0] - 1):
-        c2_tyre = Tyre(c2, c2_tyre.age + 1, c2_tyre.base)
-        y2.append(c2_tyre.lapTime())
-
-    x = list(range(1, numberOfLaps + 1))
+SIMULATION_CONFIG = SimulationConfig(seed=42)
 
 
-    fig = go.Figure()
+def format_time(total_seconds: float) -> str:
+    minutes, seconds = divmod(max(total_seconds, 0), 60)
+    return f"{int(minutes)}:{seconds:05.2f}"
 
-    colors = {
-        'S': 'red',
-        'M': 'yellow',
-        'H': 'black'
-    }
 
-    fig.add_trace(go.Scatter(
-        x=x,
-        y=y1,
-        name=f'{c1} compound',
-        line=dict(color=colors.get(c1, 'green'))
-    ))
+@app.route("/")
+def home():
+    return render_template("index.html", tracks=list(TRACKS.values()))
 
-    fig.add_trace(go.Scatter(
-        x=x,
-        y=y2,
-        name=f'{c2} compound',
-        line=dict(color=colors.get(c2, 'green'))
-    ))
 
-    fig.update_layout(
-        title=f'Race Strategy: {c1} → {c2}',
-        xaxis_title='Lap Number',
-        yaxis_title='Lap Time (seconds)',
-        template='plotly_white'
+@app.route("/api/tracks")
+def api_tracks():
+    return jsonify([asdict(t) for t in TRACKS.values()])
+
+
+@app.route("/api/calibration")
+def api_calibration():
+    return jsonify(CALIBRATION)
+
+
+@app.route("/calculate", methods=["POST"])
+def calculate():
+    data = request.get_json(silent=True) or {}
+
+    track_key = data.get("track", "monza")
+    try:
+        track = get_track(track_key)
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
+
+    overrides = {}
+    if data.get("laps") not in (None, ""):
+        try:
+            laps = int(data["laps"])
+        except (TypeError, ValueError):
+            return jsonify({"error": "laps must be an integer."}), 400
+        if laps < 2:
+            return jsonify({"error": "Need at least 2 laps to plan a pit stop."}), 400
+        if laps > 100:
+            return jsonify({"error": "laps must be 100 or fewer."}), 400
+        overrides["laps"] = laps
+
+    if track_key == "custom":
+        for field in ("pit_loss", "base_lap_time", "deg_multiplier"):
+            if data.get(field) not in (None, ""):
+                try:
+                    overrides[field] = float(data[field])
+                except (TypeError, ValueError):
+                    return jsonify({"error": f"{field} must be a number."}), 400
+
+    if overrides:
+        track = replace(track, **overrides)
+
+    inventory = TyreInventory.from_dict(data.get("inventory"))
+
+    results = best_strategies(track, top_n=5)
+    best = results[0]
+    fig = build_figure(best, track)
+    sim_results = simulate_strategies(track, results, SIMULATION_CONFIG)
+
+    def annotate(r):
+        d = r.to_dict()
+        d.update(inventory.check(list(r.compounds)))
+        return d
+
+    return jsonify(
+        {
+            "plot": figure_to_json(fig),
+            "best": annotate(best),
+            "alternatives": [annotate(r) for r in results[1:]],
+            "track": {
+                "key": track.key,
+                "name": track.name,
+                "laps": track.laps,
+                "pit_loss": track.pit_loss,
+                "circuit_length_km": track.circuit_length_km,
+                "calibrated": track.calibrated,
+                "calibration_source": track.calibration_source,
+                "sc_probability": track.sc_probability,
+            },
+            "strategy_text": (
+                f"Best strategy: {best.label} ({best.stops}-stop), "
+                f"pit on lap{'s' if len(best.pit_laps) > 1 else ''} "
+                f"{', '.join(str(p) for p in best.pit_laps)}"
+            ),
+            "time_text": f"Total time: {format_time(best.total_time)}",
+            "monte_carlo": [s.to_dict() for s in sim_results],
+            "calibration": CALIBRATION.get(track.key),
+            "heatmap": one_stop_heatmap(track),
+        }
     )
 
-    return json.dumps(fig, cls=plotly.utils.PlotlyJSONEncoder)
 
-def pickBest(numberOfLaps):
-    strategies = [
-        ("S", "M"),
-        ("S", "H"),
-        ("M", "H"),
-        ("M", "S"),
-        ("H", "S"),
-        ("H", "M")
-    ]
-    
-    best_time = float('inf')
-    best_c1 = None
-    best_c2 = None
-    
-    for c1, c2 in strategies:
-        new_time = strategy(numberOfLaps, c1, c2)[1]
-        if new_time < best_time:
-            best_time = new_time
-            best_c1 = c1
-            best_c2 = c2
-
-    return best_time // 60, best_time % 60, best_c1, best_c2
-
-@app.route('/')
-def home():
-    return render_template('index.html')
-
-@app.route('/calculate', methods=['POST'])
-def calculate():
-    data = request.get_json()
-    laps = int(data['laps'])
-    minutes, seconds, compound1, compound2 = pickBest(laps)
-    plot_json = create_plot(laps, compound1, compound2)
-    
-    return jsonify({
-        'plot': plot_json,
-        'strategy': f"Best strategy: Start on {compound1}, switch to {compound2}",
-        'time': f"Total time: {int(minutes)}:{seconds:.2f}"
-    })
-
-if __name__ == '__main__':
+if __name__ == "__main__":
     app.run(debug=True)
