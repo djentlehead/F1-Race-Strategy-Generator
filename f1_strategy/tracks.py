@@ -1,31 +1,4 @@
-"""Track presets.
 
-`laps` and `pit_loss` are approximate figures based on publicly reported
-race lap counts and pit-lane time-loss reporting (see README "Data &
-caveats" section for sources). `base_lap_time` is a rough representative
-race-pace lap time derived from circuit length / typical race lap times,
-not an official figure. `deg_multiplier` is an illustrative scalar
-(1.0 = average) reflecting how hard a circuit is generally considered to
-be on tyres -- street circuits like Monaco/Singapore run cooler and slower
-so multiplier < 1, high-energy circuits like Silverstone/Suzuka run > 1.
-
-These are deliberately simple, transparent approximations for a portfolio
-project, not a substitute for real telemetry -- **except** `pit_loss` for
-monaco, silverstone, and monza, which has been replaced with a value
-calibrated from real 2024 race data (see `f1_strategy/calibration/`). That
-calibration pipeline could not recover per-compound degradation rates
-(the data source doesn't expose tyre compound), so `deg_multiplier` and
-`base_lap_time` remain illustrative for every track, calibrated ones
-included. See the README's "Data & caveats" section and
-`f1_strategy/calibration/analyze.py` for exactly what was and wasn't
-calibrated, and why.
-
-`sc_probability` (chance of a Safety Car / VSC at some point in the race,
-used by the Monte Carlo simulator in `f1_strategy/simulation.py`) is also
-illustrative: it's informed by widely reported general trends -- street
-circuits and historically incident-prone layouts run higher, low-risk
-high-speed circuits run lower -- rather than fit to any specific dataset.
-"""
 
 from __future__ import annotations
 
