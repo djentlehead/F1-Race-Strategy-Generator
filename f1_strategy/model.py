@@ -1,25 +1,10 @@
 """Tyre degradation model.
 
-The model behind a single lap time is:
-
-    lap_time(age) = base_lap_time
-                  + compound_offset
-                  + linear_deg_rate * age * track.deg_multiplier
-                  + cliff_penalty(age)
-                  - fuel_correction(absolute_lap)
-
-`age` is how many laps the tyre has completed since it was fitted (0 on the
-out-lap). `cliff_penalty` kicks in once a tyre passes its compound's
-approximate "cliff" age, after which deg accelerates quadratically -- this
-mirrors the well known real-world behaviour where tyres are fine for a
-while and then fall off sharply, rather than degrading perfectly linearly.
-
-All numeric constants are illustrative approximations of publicly discussed
-F1 tyre behaviour (Pirelli compound deltas of a few tenths, deg rates of a
-few hundredths of a second per lap, a fuel effect of ~0.03-0.06s/lap as fuel
-burns off), not licensed Pirelli/F1 data. They are tuned so the model
-produces sensible, comparable strategies rather than to match any single
-real session lap-for-lap.
+The model behind a single lap time is:  lap_time(age) = base_lap_time
+                                                      + compound_offset
+                                                      + linear_deg_rate * age * track.deg_multiplier
+                                                      + cliff_penalty(age)
+                                                      - fuel_correction(absolute_lap)
 """
 
 from __future__ import annotations
