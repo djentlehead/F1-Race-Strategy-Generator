@@ -1,15 +1,3 @@
-"""Tyre allocation feasibility checker.
-
-In a real race weekend each team has a fixed set of tyre allocations.
-Given the compound sequence a strategy requires, this module tells the
-caller whether the inventory can fulfil it, and if so, whether any
-used sets (pre-worn in practice or qualifying) are needed.
-
-A "used" set is modelled as carrying USED_STARTING_AGE laps of
-equivalent wear — it is feasible to run but at a hidden time cost not
-captured in the base optimiser.
-"""
-
 from __future__ import annotations
 
 from dataclasses import dataclass
